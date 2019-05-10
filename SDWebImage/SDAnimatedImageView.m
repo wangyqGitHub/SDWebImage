@@ -15,6 +15,7 @@
 #import "SDWeakProxy.h"
 #import <mach/mach.h>
 #import <objc/runtime.h>
+#import "SDImageFrame.h"
 
 #if SD_MAC
 #import <CoreVideo/CoreVideo.h>
@@ -633,7 +634,14 @@ static NSUInteger SDDeviceFreeMemory() {
             UIImage *frame = [animatedImage animatedImageFrameAtIndex:fetchFrameIndex];
             SD_LOCK(self.lock);
             self.frameBuffer[@(fetchFrameIndex)] = frame;
+            
+            if (self.shouldCacheFramesDuringPlayback){
+                //NSLog(@"the frame maybe need cache at index ：-> %ld ",fetchFrameIndex);
+                SDAnimatedImage *sd_Image = (SDAnimatedImage*)self.animatedImage;
+                [sd_Image autoCacheFrameDuringPlayback:frame atIndex:fetchFrameIndex];
+            }
             SD_UNLOCK(self.lock);
+            
         }];
         [self.fetchQueue addOperation:operation];
     }

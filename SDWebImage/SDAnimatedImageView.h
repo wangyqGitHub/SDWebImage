@@ -58,6 +58,14 @@
  */
 @property (nonatomic, assign) BOOL shouldIncrementalLoad;
 
+/**
+ Whehter or not to cache frames during playback for animated image.
+ 'SDAnimatedImageView' always decode one frame for playback,we can save the frame for next loop use.
+ When playing the first loop, we save all the frames so that after looping, 'SDAnimatedImageView' can use these cached frames directly, just same to ‘preloadAllFrames’ in ‘SDAnimatedImage’. This will save decoding time and CPU usage when animated image loops, but it will take up memory space like ‘preloadAllFrames’ in ‘SDAnimatedImage’.
+ Default is NO. Set to Yes to cache frames during animated image first loop playback
+ */
+@property (nonatomic, assign) BOOL shouldCacheFramesDuringPlayback;
+
 #if SD_UIKIT
 /**
  You can specify a runloop mode to let it rendering.

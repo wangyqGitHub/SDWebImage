@@ -57,6 +57,12 @@
  */
 @property (nonatomic, assign, readonly, getter=isAllFramesLoaded) BOOL allFramesLoaded;
 
+
+/**
+ See SDAnimatedImageView's 'shouldCacheFramesDuringPlayback' documentation for more information.
+ */
+- (void)autoCacheFrameDuringPlayback:(nonnull UIImage *)image atIndex:(NSInteger)index;
+
 @end
 
 @interface SDAnimatedImage : UIImage <SDAnimatedImage>

@@ -35,6 +35,8 @@ static CGFloat SDImageScaleFromPath(NSString *string) {
 @property (nonatomic, strong) id<SDAnimatedImageCoder> coder;
 @property (nonatomic, assign, readwrite) SDImageFormat animatedImageFormat;
 @property (atomic, copy) NSArray<SDImageFrame *> *loadedAnimatedImageFrames; // Mark as atomic to keep thread-safe
+@property(atomic,copy)NSArray<NSNumber*> *arr_frameIndex;//save the frame index has cached
+
 @property (nonatomic, assign, getter=isAllFramesLoaded) BOOL allFramesLoaded;
 
 @end
@@ -146,14 +148,17 @@ static CGFloat SDImageScaleFromPath(NSString *string) {
     if (!animatedCoder) {
         return nil;
     }
+    if (scale <= 0) {
+        scale = 1;
+    }
     UIImage *image = [animatedCoder animatedImageFrameAtIndex:0];
     if (!image) {
         return nil;
     }
 #if SD_MAC
-    self = [super initWithCGImage:image.CGImage scale:MAX(scale, 1) orientation:kCGImagePropertyOrientationUp];
+    self = [super initWithCGImage:image.CGImage scale:scale orientation:kCGImagePropertyOrientationUp];
 #else
-    self = [super initWithCGImage:image.CGImage scale:MAX(scale, 1) orientation:image.imageOrientation];
+    self = [super initWithCGImage:image.CGImage scale:scale orientation:image.imageOrientation];
 #endif
     if (self) {
         _coder = animatedCoder;
@@ -176,6 +181,42 @@ static CGFloat SDImageScaleFromPath(NSString *string) {
         }
         self.loadedAnimatedImageFrames = frames;
         self.allFramesLoaded = YES;
+    }
+}
+
+- (void)autoCacheFrameDuringPlayback:(UIImage *)image atIndex:(NSInteger)index{
+    if (!self.isAllFramesLoaded) {
+        if ([self.arr_frameIndex containsObject:[NSNumber numberWithInteger:index]]) {
+            return;
+        }
+        //NSLog(@"will cache a new frame at index : --> %ld",index);
+        NSMutableArray<NSNumber*> *cachedFrameIndexs = [NSMutableArray arrayWithArray:self.arr_frameIndex];
+        [cachedFrameIndexs addObject:[NSNumber numberWithInteger:index]];
+        self.arr_frameIndex = cachedFrameIndexs;
+        NSMutableArray<SDImageFrame *> *frames = [NSMutableArray arrayWithArray:self.loadedAnimatedImageFrames];
+        NSTimeInterval duration = [self animatedImageDurationAtIndex:index];
+        SDImageFrame *frame = [SDImageFrame frameWithImage:image duration:duration];
+        [frames addObject:frame];
+        self.loadedAnimatedImageFrames = frames;
+        //Check is first frame has cached.
+        //'SDAnimatedimageView'decode first frame when animated image download by default,we donot cached it.
+        if (![self.arr_frameIndex containsObject:[NSNumber numberWithInteger:0]]){
+            if (self.loadedAnimatedImageFrames.count + 1 == self.animatedImageFrameCount){
+                NSInteger firstFrameIndex = 0;
+                [cachedFrameIndexs insertObject:[NSNumber numberWithInteger:firstFrameIndex] atIndex:firstFrameIndex];
+                self.arr_frameIndex = cachedFrameIndexs;
+                UIImage *image = [self animatedImageFrameAtIndex:firstFrameIndex];
+                NSTimeInterval duration = [self animatedImageDurationAtIndex:firstFrameIndex];
+                SDImageFrame *firstFrame = [SDImageFrame frameWithImage:image duration:duration];
+                [frames insertObject:firstFrame atIndex:firstFrameIndex];
+                self.loadedAnimatedImageFrames = frames;
+                self.allFramesLoaded = YES;
+            }
+        }else{
+            if (self.loadedAnimatedImageFrames.count == self.animatedImageFrameCount){
+                self.allFramesLoaded = YES;
+            }
+        }
     }
 }
 
