@@ -35,7 +35,7 @@ static CGFloat SDImageScaleFromPath(NSString *string) {
 @property (nonatomic, strong) id<SDAnimatedImageCoder> coder;
 @property (nonatomic, assign, readwrite) SDImageFormat animatedImageFormat;
 @property (atomic, copy) NSArray<SDImageFrame *> *loadedAnimatedImageFrames; // Mark as atomic to keep thread-safe
-@property(atomic,copy)NSArray<NSNumber*> *arr_frameIndex;//save the frame index has cached
+@property (atomic, copy) NSDictionary<NSNumber* ,SDImageFrame*> * cachedFramesDictionary;//Save already cached frames and indexes
 
 @property (nonatomic, assign, getter=isAllFramesLoaded) BOOL allFramesLoaded;
 
@@ -186,38 +186,57 @@ static CGFloat SDImageScaleFromPath(NSString *string) {
 
 - (void)autoCacheFrameDuringPlayback:(UIImage *)image atIndex:(NSInteger)index{
     if (!self.isAllFramesLoaded) {
-        if ([self.arr_frameIndex containsObject:[NSNumber numberWithInteger:index]]) {
+        NSNumber *indexNum = [NSNumber numberWithInteger:index];
+        if ([self.cachedFramesDictionary.allKeys containsObject: indexNum]) {
             return;
         }
-        //NSLog(@"will cache a new frame at index : --> %ld",index);
-        NSMutableArray<NSNumber*> *cachedFrameIndexs = [NSMutableArray arrayWithArray:self.arr_frameIndex];
-        [cachedFrameIndexs addObject:[NSNumber numberWithInteger:index]];
-        self.arr_frameIndex = cachedFrameIndexs;
-        NSMutableArray<SDImageFrame *> *frames = [NSMutableArray arrayWithArray:self.loadedAnimatedImageFrames];
+        //        NSLog(@"will cache a new frame at index : --> %ld",index);
         NSTimeInterval duration = [self animatedImageDurationAtIndex:index];
         SDImageFrame *frame = [SDImageFrame frameWithImage:image duration:duration];
-        [frames addObject:frame];
-        self.loadedAnimatedImageFrames = frames;
+        NSMutableDictionary<NSNumber*,SDImageFrame*> *tempCachedFrameDict = [NSMutableDictionary dictionaryWithDictionary:self.cachedFramesDictionary];
+        [tempCachedFrameDict setObject:frame forKey:indexNum];
+        self.cachedFramesDictionary = [NSDictionary dictionaryWithDictionary:tempCachedFrameDict];
+        self.loadedAnimatedImageFrames = tempCachedFrameDict.allValues;
+        
         //Check is first frame has cached.
         //'SDAnimatedimageView'decode first frame when animated image download by default,we donot cached it.
-        if (![self.arr_frameIndex containsObject:[NSNumber numberWithInteger:0]]){
+        NSInteger firstFrameIndex = 0;
+        NSNumber *firstIndexNum = [NSNumber numberWithInteger:firstFrameIndex];
+        if (![self.cachedFramesDictionary.allKeys containsObject:firstIndexNum]){
             if (self.loadedAnimatedImageFrames.count + 1 == self.animatedImageFrameCount){
-                NSInteger firstFrameIndex = 0;
-                [cachedFrameIndexs insertObject:[NSNumber numberWithInteger:firstFrameIndex] atIndex:firstFrameIndex];
-                self.arr_frameIndex = cachedFrameIndexs;
                 UIImage *image = [self animatedImageFrameAtIndex:firstFrameIndex];
                 NSTimeInterval duration = [self animatedImageDurationAtIndex:firstFrameIndex];
                 SDImageFrame *firstFrame = [SDImageFrame frameWithImage:image duration:duration];
-                [frames insertObject:firstFrame atIndex:firstFrameIndex];
-                self.loadedAnimatedImageFrames = frames;
+                [tempCachedFrameDict setObject:firstFrame forKey:firstIndexNum];
+                self.cachedFramesDictionary = [NSDictionary dictionaryWithDictionary:tempCachedFrameDict];
+                self.loadedAnimatedImageFrames = [self sortAllCachedFrames:tempCachedFrameDict];
                 self.allFramesLoaded = YES;
             }
         }else{
             if (self.loadedAnimatedImageFrames.count == self.animatedImageFrameCount){
+                self.loadedAnimatedImageFrames = [self sortAllCachedFrames:tempCachedFrameDict];
                 self.allFramesLoaded = YES;
             }
         }
     }
+}
+
+- (NSArray<SDImageFrame*> *)sortAllCachedFrames:(NSDictionary<NSNumber*,SDImageFrame*>*)targetDic{
+    NSComparator keysSort = ^(id numIndex1,id numIndex2){
+        if (numIndex1 > numIndex2) {
+            return (NSComparisonResult)NSOrderedDescending;
+        }else if (numIndex1 < numIndex2){
+            return (NSComparisonResult)NSOrderedAscending;
+        }else{
+            return (NSComparisonResult)NSOrderedSame;
+        }
+    };
+    NSArray *allKeysSorted = [targetDic.allKeys sortedArrayUsingComparator:keysSort];
+    NSMutableArray<SDImageFrame*> *allValueSorted = [NSMutableArray array];
+    for (NSString *key in allKeysSorted) {
+        [allValueSorted addObject:targetDic[key]];
+    }
+    return allValueSorted.copy;
 }
 
 - (void)unloadAllFrames {
